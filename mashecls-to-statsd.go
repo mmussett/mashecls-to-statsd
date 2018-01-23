@@ -143,7 +143,6 @@ func emit(e ECLS) {
 
 	// mashery.service.<<SERVICENAME>>
 	statName = fmt.Sprintf(".%s.%s.%s.%s.%s.%s",serviceName,packageName,planName,endpointName,methodName,httpMethod)
-	statsdBufferService.Incr(statName, 1)
 	statsdBufferService.Absolute(statName+".bytes", bytes)
 	statsdBufferService.Incr(statName+".status_code."+httpStatusCode,1)
 	statsdBufferService.Incr(statName+".response_string."+responseString,1)
@@ -152,7 +151,6 @@ func emit(e ECLS) {
 
 	// mashery.developer.<<API KEY>>
 	statName = fmt.Sprintf(".%s",apiKey)
-	statsdBufferDeveloper.Incr(statName,1)
 	statsdBufferDeveloper.Absolute(statName+".bytes", bytes)
 	statsdBufferDeveloper.Incr(statName+".status_code."+httpStatusCode,1)
 	statsdBufferDeveloper.Incr(statName+".response_string."+responseString,1)
@@ -161,7 +159,6 @@ func emit(e ECLS) {
 
   // mashery.endpoint.<<ENDPOINT>>
 	statName = fmt.Sprintf(".%s",endpoint[0])
-	statsdBufferEndpoint.Incr(statName,1)
 	statsdBufferEndpoint.Absolute(statName+".bytes", bytes)
 	statsdBufferEndpoint.Incr(statName+".status_code."+httpStatusCode,1)
 	statsdBufferEndpoint.Incr(statName+".response_string."+responseString,1)
