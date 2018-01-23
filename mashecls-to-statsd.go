@@ -18,9 +18,7 @@ import (
 )
 
 const (
-	prefix     string        = "ecls"
-	statsdHost string        = "10.0.0.5:8125"
-	bufferSize time.Duration = 2
+	statsdHost string        = "0.0.0.0:8125"
 )
 
 var (
