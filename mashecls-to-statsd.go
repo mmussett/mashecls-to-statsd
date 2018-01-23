@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"fmt"
 )
 
 const (
@@ -118,54 +119,53 @@ func emit(e ECLS) {
 	var methodName string = e.Data[0].APIMethodName
 	var apiKey string = e.Data[0].APIKey
 	var httpStatusCode string = e.Data[0].HTTPStatusCode
+	var responseString string = e.Data[0].ResponseString
 	var uri string = e.Data[0].URI
 	var httpMethod = e.Data[0].HTTPMethod
 	var endpoint = strings.Split(uri,"?")
 
-
-
-	//var source_ip string = strings.Replace(e.Data[0].SrcIP,".","-",-1)
 	if len(packageName) == 0 {
-		return
+		packageName = "-"
 	}
 
 	if len(planName) == 0 {
-		return
+		planName = "-"
 	}
 
 	if len(methodName) == 0 {
-		methodName = "NA"
+		methodName = "-"
 	}
 
-	statName = "." + serviceName + "." + packageName + "." + planName + "." + endpointName + "." + methodName
 
+	bytes, _ := strconv.ParseInt(e.Data[0].Bytes, 10, 64)
+	f, _ := strconv.ParseFloat(e.Data[0].TotalRequestExecTime, 64)
+	totalReqExecTime := int64(f * 1000)
+
+	// mashery.service.<<SERVICENAME>>
+	statName = fmt.Sprintf(".%s.%s.%s.%s.%s.%s",serviceName,packageName,planName,endpointName,methodName,httpMethod)
 	statsdBufferService.Incr(statName, 1)
-
-	i, err := strconv.ParseInt(e.Data[0].Bytes, 10, 64)
-	if err == nil {
-		statsdBufferService.Absolute(statName+".bytes", i)
-	}
-
+	statsdBufferService.Absolute(statName+".bytes", bytes)
 	statsdBufferService.Incr(statName+".status_code."+httpStatusCode,1)
+	statsdBufferService.Incr(statName+".response_string."+responseString,1)
+	statsdBufferService.Timing(statName+".total_request_exec_time", totalReqExecTime)
 
-	f, err := strconv.ParseFloat(e.Data[0].TotalRequestExecTime, 64)
-	d := int64(f * 1000)
-	if err == nil {
-		statsdBufferService.Timing(statName+".total_request_exec_time", d)
-	}
 
-	statName = ".api_key."+apiKey
+	// mashery.developer.<<API KEY>>
+	statName = fmt.Sprintf(".%s",apiKey)
 	statsdBufferDeveloper.Incr(statName,1)
-	statsdBufferDeveloper.Absolute(statName+".bytes", i)
-	statsdBufferDeveloper.Timing(statName+".total_request_exec_time", d)
+	statsdBufferDeveloper.Absolute(statName+".bytes", bytes)
+	statsdBufferDeveloper.Incr(statName+".status_code."+httpStatusCode,1)
+	statsdBufferDeveloper.Incr(statName+".response_string."+responseString,1)
+	statsdBufferDeveloper.Timing(statName+".total_request_exec_time", totalReqExecTime)
 
 
-
-	statName = "."+httpMethod+"."+ endpoint[0]
-
+  // mashery.endpoint.<<ENDPOINT>>
+	statName = fmt.Sprintf(".%s",endpoint[0])
 	statsdBufferEndpoint.Incr(statName,1)
-	statsdBufferEndpoint.Absolute(statName+".bytes", i)
-	statsdBufferEndpoint.Timing(statName+".total_request_exec_time", d)
+	statsdBufferEndpoint.Absolute(statName+".bytes", bytes)
+	statsdBufferEndpoint.Incr(statName+".status_code."+httpStatusCode,1)
+	statsdBufferEndpoint.Incr(statName+".response_string."+responseString,1)
+	statsdBufferEndpoint.Timing(statName+".total_request_exec_time", totalReqExecTime)
 
 
 	return
