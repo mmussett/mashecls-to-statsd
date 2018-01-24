@@ -7,7 +7,7 @@ import (
 	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/websocket"
 	"github.com/quipo/statsd"
-	"log"
+	"github.com/op/go-logging"
 	"net/url"
 	"os"
 	"os/signal"
@@ -18,13 +18,14 @@ import (
 )
 
 const (
-	statsdHost string        = "0.0.0.0:8125"
+	statsdHost         = "0.0.0.0:8125"
 )
 
 var (
 	host         = flag.String("host", "streaming-api.mashery.com", "ECLS Service Host")
 	path         = flag.String("path", "/ecls/subscribe/c47f06e6-2ef8-11e7-93ae-92361f002671/Acme", "ECLS Subscription Path")
 	key          = flag.String("key", "vm6uYvgwt6rJDTevfUjZjT8WpEkzuaQmRTD", "API Key")
+	debug        = flag.Bool("debug", false, "Debug flag")
 
 	statsdClientService *statsd.StatsdClient
 	statsdClientDeveloper *statsd.StatsdClient
@@ -33,6 +34,11 @@ var (
 	statsdBufferDeveloper *statsd.StatsdBuffer
 
 	interval = time.Second * 5
+
+	log    = logging.MustGetLogger("mdre")
+	format = logging.MustStringFormatter(`%{color}%{time:15:04:05.000} %{shortfunc} ▶ %{level:.5s} %{color:reset} %{message}`)
+
+
 )
 
 type ECLS struct {
@@ -76,19 +82,21 @@ type ECLS struct {
 }
 
 func init() {
-	log.Println("In init()")
+	if *debug {
+		log.Debug("In init()")
+		}
 
 	statsdClientService = statsd.NewStatsdClient(statsdHost, "mashery.service")
 	err := statsdClientService.CreateSocket()
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		os.Exit(1)
 	}
 
 	statsdClientDeveloper = statsd.NewStatsdClient(statsdHost, "mashery.developer")
 	err = statsdClientDeveloper.CreateSocket()
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		os.Exit(1)
 	}
 
@@ -97,9 +105,11 @@ func init() {
 }
 
 
-func emit(e ECLS) {
+func handleEclsEvent(e ECLS) {
 
-	spew.Dump(e)
+	if *debug {
+		spew.Dump(e)
+	}
 
 	var statName string
 	var serviceName string = e.Data[0].ServiceName
@@ -154,9 +164,7 @@ func main() {
 	defer statsdClientService.Close()
 	defer statsdClientDeveloper.Close()
 
-
 	flag.Parse()
-	log.SetFlags(0)
 
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
@@ -165,7 +173,7 @@ func main() {
 	rawQuery += *key
 
 	u := url.URL{Scheme: "wss", Host: *host, Path: *path, RawQuery: rawQuery}
-	log.Printf("connecting to %s", u.String())
+	log.Info("connecting to %s", u.String())
 
 	tlsConfig := &tls.Config{InsecureSkipVerify: true}
 
@@ -173,7 +181,7 @@ func main() {
 
 	c, resp, err := d.Dial(u.String(), nil)
 	if err != nil {
-		log.Printf("handshake failed with status %d", resp.StatusCode)
+		log.Error("handshake failed with status %d", resp.StatusCode)
 		os.Exit(-1)
 	}
 	defer c.Close()
@@ -184,23 +192,31 @@ func main() {
 		defer c.Close()
 		defer close(done)
 		for {
+			if *debug {
+				log.Debug("event processing cycle starting")
+			}
 			_, message, err := c.ReadMessage()
 			if err != nil {
-				log.Println("read:", err)
+				log.Error("read:", err)
 				return
 			}
-
-			var s string = string(message)
+			if *debug {
+				log.Debug("received message from websocket")
+			}
+			var s  = string(message)
 			if strings.HasPrefix(s, "Response To") {
 			} else {
 				var e ECLS
 				err = json.Unmarshal(message, &e)
 				if err != nil {
-					log.Println("unmarshal:", err)
+					log.Error("unmarshal:", err)
 				}
 
-				emit(e)
+				handleEclsEvent(e)
 
+			}
+			if *debug {
+				log.Debug("event processing cycle completed")
 			}
 		}
 	}()
@@ -213,16 +229,18 @@ func main() {
 		case t := <-ticker.C:
 			err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
 			if err != nil {
-				log.Println("write:", err)
+				log.Error("write:", err)
 				return
 			}
 		case <-interrupt:
-			log.Println("interrupt")
+			if *debug {
+				log.Debug("interrupt")
+			}
 			// To cleanly close a connection, a client should send a close
 			// frame and wait for the server to close the connection.
 			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				log.Println("write close:", err)
+				log.Error("write close:", err)
 				return
 			}
 			select {
