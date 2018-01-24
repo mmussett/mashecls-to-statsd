@@ -25,12 +25,13 @@ var (
 	host         = flag.String("host", "streaming-api.mashery.com", "ECLS Service Host")
 	path         = flag.String("path", "/ecls/subscribe/c47f06e6-2ef8-11e7-93ae-92361f002671/Acme", "ECLS Subscription Path")
 	key          = flag.String("key", "vm6uYvgwt6rJDTevfUjZjT8WpEkzuaQmRTD", "API Key")
+
 	statsdClientService *statsd.StatsdClient
 	statsdClientDeveloper *statsd.StatsdClient
-	statsdClientEndpoint *statsd.StatsdClient
+
 	statsdBufferService *statsd.StatsdBuffer
 	statsdBufferDeveloper *statsd.StatsdBuffer
-	statsdBufferEndpoint  *statsd.StatsdBuffer
+
 	interval = time.Second * 5
 )
 
@@ -91,16 +92,7 @@ func init() {
 		os.Exit(1)
 	}
 
-
-	statsdClientEndpoint = statsd.NewStatsdClient(statsdHost, "mashery.endpoint")
-	err = statsdClientEndpoint.CreateSocket()
-	if err != nil {
-		log.Println(err)
-		os.Exit(1)
-	}
-
 	statsdBufferService = statsd.NewStatsdBuffer(interval, statsdClientService)
-	statsdBufferEndpoint = statsd.NewStatsdBuffer(interval, statsdClientEndpoint)
 	statsdBufferDeveloper = statsd.NewStatsdBuffer(interval, statsdClientDeveloper)
 }
 
@@ -118,9 +110,8 @@ func emit(e ECLS) {
 	var apiKey string = e.Data[0].APIKey
 	var httpStatusCode string = e.Data[0].HTTPStatusCode
 	var responseString string = e.Data[0].ResponseString
-	var uri string = e.Data[0].URI
 	var httpMethod = e.Data[0].HTTPMethod
-	var endpoint = strings.Split(uri,"?")
+
 
 	if len(packageName) == 0 {
 		packageName = "-"
@@ -155,14 +146,6 @@ func emit(e ECLS) {
 	statsdBufferDeveloper.Timing(statName+".total_request_exec_time", totalReqExecTime)
 
 
-  // mashery.endpoint.<<ENDPOINT>>
-	statName = fmt.Sprintf(".%s",endpoint[0])
-	statsdBufferEndpoint.Absolute(statName+".bytes", bytes)
-	statsdBufferEndpoint.Incr(statName+".status_code."+httpStatusCode,1)
-	statsdBufferEndpoint.Incr(statName+".response_string."+responseString,1)
-	statsdBufferEndpoint.Timing(statName+".total_request_exec_time", totalReqExecTime)
-
-
 	return
 }
 
@@ -170,7 +153,7 @@ func main() {
 
 	defer statsdClientService.Close()
 	defer statsdClientDeveloper.Close()
-	defer statsdClientEndpoint.Close()
+
 
 	flag.Parse()
 	log.SetFlags(0)
