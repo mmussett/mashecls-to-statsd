@@ -127,13 +127,33 @@ func handleEclsEvent(e ECLS) {
 	f, _ := strconv.ParseFloat(e.Data[0].TotalRequestExecTime, 64)
 	totalReqExecTime := int64(f * 1000)
 
+	f, _ = strconv.ParseFloat(e.Data[0].ClientTransferTime, 64)
+	clientTransferTime := int64(f * 1000)
+
+	f, _ = strconv.ParseFloat(e.Data[0].PreTransferTime, 64)
+	preTransferTime := int64(f * 1000)
+
+	f, _ = strconv.ParseFloat(e.Data[0].ConnectTime, 64)
+	connectTime := int64(f * 1000)
+
+	f, _ = strconv.ParseFloat(e.Data[0].RemoteTotalTime, 64)
+	remoteTotalTime := int64(f * 1000)
+
+	f, _ = strconv.ParseFloat(e.Data[0].RequestTime, 64)
+	requestTime := int64(f * 1000)
+
+
 	// mashery.service.<<SERVICENAME>>
 	statName = fmt.Sprintf(".%s.%s.%s.%s.%s.%s",serviceName,packageName,planName,endpointName,methodName,httpMethod)
 	statsdBufferService.Absolute(statName+".bytes", bytes)
 	statsdBufferService.Incr(statName+".status_code."+httpStatusCode,1)
 	statsdBufferService.Incr(statName+".response_string."+responseString,1)
 	statsdBufferService.Timing(statName+".total_request_exec_time", totalReqExecTime)
-
+	statsdBufferService.Timing(statName+".client_transfer_time", clientTransferTime)
+	statsdBufferService.Timing(statName+".pre_transfer_time", preTransferTime)
+	statsdBufferService.Timing(statName+".connect_time", connectTime)
+	statsdBufferService.Timing(statName+".remote_total_time", remoteTotalTime)
+	statsdBufferService.Timing(statName+".request_time", requestTime)
 
 	// mashery.developer.<<API KEY>>
 	statName = fmt.Sprintf(".%s",apiKey)
@@ -141,7 +161,11 @@ func handleEclsEvent(e ECLS) {
 	statsdBufferDeveloper.Incr(statName+".status_code."+httpStatusCode,1)
 	statsdBufferDeveloper.Incr(statName+".response_string."+responseString,1)
 	statsdBufferDeveloper.Timing(statName+".total_request_exec_time", totalReqExecTime)
-
+	statsdBufferDeveloper.Timing(statName+".client_transfer_time", clientTransferTime)
+	statsdBufferDeveloper.Timing(statName+".pre_transfer_time", preTransferTime)
+	statsdBufferDeveloper.Timing(statName+".connect_time", connectTime)
+	statsdBufferDeveloper.Timing(statName+".remote_total_time", remoteTotalTime)
+	statsdBufferDeveloper.Timing(statName+".request_time", requestTime)
 
 	return
 }
