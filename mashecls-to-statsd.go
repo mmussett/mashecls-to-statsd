@@ -1,14 +1,11 @@
 package main
 
 import (
-	"crypto/tls"
 	"encoding/json"
 	"flag"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/gorilla/websocket"
 	"github.com/quipo/statsd"
 	"github.com/op/go-logging"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -22,10 +19,6 @@ const (
 )
 
 var (
-	host         = flag.String("host", "streaming-api.mashery.com", "ECLS Service Host")
-	path         = flag.String("path", "/ecls/subscribe/c47f06e6-2ef8-11e7-93ae-92361f002671/Acme", "ECLS Subscription Path")
-	key          = flag.String("key", "vm6uYvgwt6rJDTevfUjZjT8WpEkzuaQmRTD", "API Key")
-	debug        = flag.Bool("debug", false, "Debug flag")
 
 	statsdClientService *statsd.StatsdClient
 	statsdClientDeveloper *statsd.StatsdClient
@@ -82,9 +75,6 @@ type ECLS struct {
 }
 
 func init() {
-	if *debug {
-		log.Debug("In init()")
-		}
 
 	statsdClientService = statsd.NewStatsdClient(statsdHost, "mashery.service")
 	err := statsdClientService.CreateSocket()
@@ -107,9 +97,6 @@ func init() {
 
 func handleEclsEvent(e ECLS) {
 
-	if *debug {
-		spew.Dump(e)
-	}
 
 	var statName string
 	var serviceName string = e.Data[0].ServiceName
@@ -166,89 +153,56 @@ func main() {
 
 	flag.Parse()
 
+	if len(os.Args) < 2 {
+		fmt.Println("\n  Usage: mashecls-to-statsd <<ws:// or wss:// URL>>")
+		os.Exit(-1)
+	}
+
+	addr := os.Args[len(os.Args)-1]
+	if !strings.HasPrefix(addr, "ws://") && !strings.HasPrefix(addr, "wss://") {
+		addr = "ws://" + addr
+	}
+
+	log.Info("connecting to: ", addr)
+	c, resp, err := websocket.DefaultDialer.Dial(addr, nil)
+	if err != nil {
+		log.Error("handshake failed with status: ", resp.StatusCode)
+		os.Exit(-1)
+	}
+
+	defer c.Close()
+
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	var rawQuery string = "key="
-	rawQuery += *key
-
-	u := url.URL{Scheme: "wss", Host: *host, Path: *path, RawQuery: rawQuery}
-	log.Info("connecting to %s", u.String())
-
-	tlsConfig := &tls.Config{InsecureSkipVerify: true}
-
-	d := websocket.Dialer{TLSClientConfig: tlsConfig, EnableCompression: true}
-
-	c, resp, err := d.Dial(u.String(), nil)
-	if err != nil {
-		log.Error("handshake failed with status %d", resp.StatusCode)
-		os.Exit(-1)
-	}
-	defer c.Close()
-
-	done := make(chan struct{})
-
 	go func() {
-		defer c.Close()
-		defer close(done)
 		for {
-			if *debug {
-				log.Debug("event processing cycle starting")
-			}
 			_, message, err := c.ReadMessage()
 			if err != nil {
 				log.Error("read:", err)
+				close(interrupt)
 				return
 			}
-			if *debug {
-				log.Debug("received message from websocket")
-			}
-			var s  = string(message)
-			if strings.HasPrefix(s, "Response To") {
-			} else {
-				var e ECLS
-				err = json.Unmarshal(message, &e)
-				if err != nil {
-					log.Error("unmarshal:", err)
-				}
 
-				handleEclsEvent(e)
+			log.Info(fmt.Sprintf("%s\n", message))
 
+			var e ECLS
+			err = json.Unmarshal(message, &e)
+			if err != nil {
+				log.Error("unmarshal:", err)
 			}
-			if *debug {
-				log.Debug("event processing cycle completed")
-			}
+
+			handleEclsEvent(e)
+
 		}
 	}()
 
-	ticker := time.NewTicker(time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case t := <-ticker.C:
-			err := c.WriteMessage(websocket.TextMessage, []byte(t.String()))
-			if err != nil {
-				log.Error("write:", err)
-				return
-			}
-		case <-interrupt:
-			if *debug {
-				log.Debug("interrupt")
-			}
-			// To cleanly close a connection, a client should send a close
-			// frame and wait for the server to close the connection.
-			err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-			if err != nil {
-				log.Error("write close:", err)
-				return
-			}
-			select {
-			case <-done:
-			case <-time.After(time.Second):
-			}
-			c.Close()
-			return
-		}
+	// Handle program interrupt
+	select {
+	case <-interrupt:
+		c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
+		c.Close()
+		os.Exit(0)
 	}
+
 }
