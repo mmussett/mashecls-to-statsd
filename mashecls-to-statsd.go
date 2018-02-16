@@ -146,6 +146,7 @@ func handleEclsEvent(e ECLS) {
 	// mashery.service.<<SERVICENAME>>
 	statName = fmt.Sprintf(".%s.%s.%s.%s.%s.%s",serviceName,packageName,planName,endpointName,methodName,httpMethod)
 	statsdBufferService.Absolute(statName+".bytes", bytes)
+	statsdBufferService.Incr(statName+".invocation_count",1)
 	statsdBufferService.Incr(statName+".status_code."+httpStatusCode,1)
 	statsdBufferService.Incr(statName+".response_string."+responseString,1)
 	statsdBufferService.Timing(statName+".total_request_exec_time", totalReqExecTime)
@@ -155,9 +156,11 @@ func handleEclsEvent(e ECLS) {
 	statsdBufferService.Timing(statName+".remote_total_time", remoteTotalTime)
 	statsdBufferService.Timing(statName+".request_time", requestTime)
 
+
 	// mashery.developer.<<API KEY>>
 	statName = fmt.Sprintf(".%s",apiKey)
 	statsdBufferDeveloper.Absolute(statName+".bytes", bytes)
+	statsdBufferDeveloper.Incr(statName+".invocation_count", 1)
 	statsdBufferDeveloper.Incr(statName+".status_code."+httpStatusCode,1)
 	statsdBufferDeveloper.Incr(statName+".response_string."+responseString,1)
 	statsdBufferDeveloper.Timing(statName+".total_request_exec_time", totalReqExecTime)
